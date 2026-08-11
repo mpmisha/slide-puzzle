@@ -19,6 +19,11 @@ const HUD_HEIGHT = 64;
 const GAP_TOP = 12;
 const SLIDE_MS = 130;
 const SOLVE_PAUSE_MS = 700;
+// In picture mode we hold the finished board (with the last piece filled in) a
+// little longer so the child can enjoy the whole picture; longer still for a
+// photo they chose themselves.
+const SOLVE_PAUSE_PICTURE_MS = 1600;
+const SOLVE_PAUSE_CUSTOM_MS = 3200;
 
 class GameScene {
   constructor(canvas, dom) {
@@ -227,6 +232,17 @@ class GameScene {
     this.dom.setMoves?.(this.game.moves);
   }
 
+  // How long to hold the completed board before showing the banner. Longer in
+  // picture mode (so the whole picture reads), longest for a custom photo.
+  solvePauseMs() {
+    if (this.settings.pictureMode && this.pictureCanvas) {
+      return this.settings.pictureId === 'custom'
+        ? SOLVE_PAUSE_CUSTOM_MS
+        : SOLVE_PAUSE_PICTURE_MS;
+    }
+    return SOLVE_PAUSE_MS;
+  }
+
   // MARK: - Render loop
 
   loop(now) {
@@ -234,7 +250,7 @@ class GameScene {
 
     // Present the solved / victory overlay a beat after the winning slide.
     if ((this.game.phase === Phase.solved || this.game.phase === Phase.victory)
-        && !this.presented && now - this.solveAt > SOLVE_PAUSE_MS) {
+        && !this.presented && now - this.solveAt > this.solvePauseMs()) {
       this.presented = true;
       this.overlayOpen = true;
       if (this.game.phase === Phase.victory) {
@@ -271,12 +287,24 @@ class GameScene {
     const size = this.game.size;
     const showNumbers = this.settings.showNumbers;
     const pic = this.settings.pictureMode ? this.pictureCanvas : null;
+    const solved = this.game.phase === Phase.solved || this.game.phase === Phase.victory;
 
-    // Empty cells first (the recessed slot under the blank).
+    // Empty cells first (the recessed slot under the blank). In picture mode,
+    // once solved, fill that last slot with its missing slice so the whole
+    // picture is complete for the child to enjoy.
     for (let p = 0; p < puzzle.count; p++) {
       if (puzzle.tiles[p] === puzzle.blankValue) {
         const r = this.cellRect(p);
-        drawEmptyCell(ctx, r.x, r.y, r.w, r.h);
+        if (pic && solved && !this.anim) {
+          const bv = puzzle.blankValue;
+          drawPictureTile(
+            ctx, r.x, r.y, r.w, r.h, pic,
+            Math.floor(bv / size), bv % size, size,
+            bv + 1, false,
+          );
+        } else {
+          drawEmptyCell(ctx, r.x, r.y, r.w, r.h);
+        }
       }
     }
 
