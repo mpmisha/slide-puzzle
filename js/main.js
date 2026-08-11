@@ -2,6 +2,7 @@
 // with the Playground hub (shared Sound/Vibration settings + back handshake).
 import { GameScene } from './scene.js';
 import { SettingsStore } from './storage.js';
+import { BUILTINS, renderBuiltin } from './pictures.js';
 
 const $ = (id) => document.getElementById(id);
 const canvas = $('game');
@@ -41,11 +42,134 @@ $('gear').addEventListener('click', () => {
 
 const settingsOverlay = $('settings-overlay');
 const toggleNumbers = $('toggle-numbers');
+const togglePicture = $('toggle-picture');
+const picturePicker = $('picture-picker');
+const pictureFile = $('picture-file');
 const toggleSound = $('toggle-sound');
 const toggleHaptics = $('toggle-haptics');
 
+// ---- Picture picker (built-in thumbnails + upload tile) ----
+
+let uploadTile;
+
+function buildPicker() {
+  const frag = document.createDocumentFragment();
+  BUILTINS.forEach((b) => {
+    const btn = document.createElement('button');
+    btn.className = 'pic-thumb';
+    btn.dataset.id = b.id;
+    btn.setAttribute('aria-label', b.name);
+    const thumb = renderBuiltin(b.id, 96);
+    thumb.className = 'pic-thumb-img';
+    btn.appendChild(thumb);
+    btn.addEventListener('click', () => selectPicture(b.id));
+    frag.appendChild(btn);
+  });
+  // Upload tile.
+  uploadTile = document.createElement('button');
+  uploadTile.className = 'pic-thumb pic-upload';
+  uploadTile.dataset.id = 'custom';
+  uploadTile.setAttribute('aria-label', 'Upload your own photo');
+  uploadTile.innerHTML = '<span class="pic-upload-plus">＋</span>';
+  uploadTile.addEventListener('click', () => {
+    if (SettingsStore.customImage && SettingsStore.pictureId !== 'custom') {
+      selectPicture('custom'); // already have one — just switch to it
+    } else {
+      pictureFile.click();
+    }
+  });
+  frag.appendChild(uploadTile);
+  picturePicker.insertBefore(frag, pictureFile);
+  refreshUploadTile();
+}
+
+function refreshUploadTile() {
+  if (!uploadTile) return;
+  const data = SettingsStore.customImage;
+  if (data) {
+    uploadTile.classList.add('has-image');
+    uploadTile.style.backgroundImage = `url(${data})`;
+    uploadTile.querySelector('.pic-upload-plus').textContent = '';
+  } else {
+    uploadTile.classList.remove('has-image');
+    uploadTile.style.backgroundImage = '';
+    uploadTile.querySelector('.pic-upload-plus').textContent = '＋';
+  }
+}
+
+function syncPickerSelection() {
+  const current = SettingsStore.pictureId;
+  picturePicker.querySelectorAll('.pic-thumb').forEach((el) => {
+    el.classList.toggle('selected', el.dataset.id === current);
+  });
+}
+
+function selectPicture(id) {
+  SettingsStore.pictureId = id;
+  if (!SettingsStore.pictureMode) {
+    SettingsStore.pictureMode = true;
+    togglePicture.classList.add('on');
+    picturePicker.hidden = false;
+  }
+  syncPickerSelection();
+  scene.refreshPicture();
+  scene.sound.play('button');
+}
+
+pictureFile.addEventListener('change', () => {
+  const file = pictureFile.files && pictureFile.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    downscaleDataUrl(reader.result, 720).then((dataUrl) => {
+      SettingsStore.customImage = dataUrl;
+      refreshUploadTile();
+      selectPicture('custom');
+    });
+  };
+  reader.readAsDataURL(file);
+  pictureFile.value = '';
+});
+
+// Downscale + JPEG-encode an uploaded image so it fits in localStorage and
+// renders fast (photos from a phone are far too large otherwise).
+function downscaleDataUrl(dataUrl, maxSide) {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      const scale = Math.min(1, maxSide / Math.max(img.width, img.height));
+      const w = Math.max(1, Math.round(img.width * scale));
+      const h = Math.max(1, Math.round(img.height * scale));
+      const c = document.createElement('canvas');
+      c.width = w; c.height = h;
+      c.getContext('2d').drawImage(img, 0, 0, w, h);
+      try {
+        resolve(c.toDataURL('image/jpeg', 0.82));
+      } catch (_) {
+        resolve(dataUrl);
+      }
+    };
+    img.onerror = () => resolve(dataUrl);
+    img.src = dataUrl;
+  });
+}
+
+buildPicker();
+
+togglePicture.addEventListener('click', () => {
+  SettingsStore.pictureMode = !SettingsStore.pictureMode;
+  togglePicture.classList.toggle('on', SettingsStore.pictureMode);
+  picturePicker.hidden = !SettingsStore.pictureMode;
+  syncPickerSelection();
+  scene.refreshPicture();
+  scene.sound.play('button');
+});
+
 function syncSettingsUi() {
   toggleNumbers.classList.toggle('on', SettingsStore.showNumbers);
+  togglePicture.classList.toggle('on', SettingsStore.pictureMode);
+  picturePicker.hidden = !SettingsStore.pictureMode;
+  syncPickerSelection();
   toggleSound.classList.toggle('on', SettingsStore.isSoundEnabled);
   toggleHaptics.classList.toggle('on', SettingsStore.areHapticsEnabled);
 }

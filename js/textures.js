@@ -87,6 +87,60 @@ function drawTile(ctx, x, y, w, h, color, number, showNumber, alpha = 1) {
   ctx.restore();
 }
 
+// A glossy raised tile that shows a slice of a picture (picture mode). The
+// slice is taken from the tile's HOME position in the source square so a solved
+// board rebuilds the whole picture. Keeps a light bevel + gloss so it still
+// feels like the candy set, without hiding the image.
+function drawPictureTile(ctx, x, y, w, h, src, homeRow, homeCol, size, number, showNumber, alpha = 1) {
+  const radius = Math.min(w, h) * 0.20;
+  ctx.save();
+  if (alpha !== 1) ctx.globalAlpha = alpha;
+
+  // Bevel shadow body.
+  const inset = Math.max(0.5, h * 0.03);
+  ctx.fillStyle = 'rgba(16,18,41,0.45)';
+  roundRect(ctx, x + inset, y + inset, w - inset * 2, h - inset * 2, radius);
+  ctx.fill();
+
+  const fx = x + w * 0.05;
+  const fy = y + h * 0.05;
+  const fw = w - w * 0.10;
+  const fh = h - h * 0.16;
+
+  ctx.save();
+  roundRect(ctx, fx, fy, fw, fh, radius * 0.8);
+  ctx.clip();
+
+  // Draw the picture slice for this tile's home cell.
+  const sw = src.width / size;
+  const sh = src.height / size;
+  ctx.drawImage(src, homeCol * sw, homeRow * sh, sw, sh, fx, fy, fw, fh);
+
+  // Top gloss.
+  ctx.fillStyle = 'rgba(255,255,255,0.16)';
+  ctx.fillRect(fx, fy, fw, fh * 0.4);
+  ctx.restore();
+
+  // Thin light border to separate neighbouring tiles.
+  ctx.strokeStyle = 'rgba(255,255,255,0.18)';
+  ctx.lineWidth = Math.max(1, w * 0.01);
+  roundRect(ctx, fx, fy, fw, fh, radius * 0.8);
+  ctx.stroke();
+
+  if (showNumber) {
+    ctx.fillStyle = 'rgba(255,255,255,0.9)';
+    ctx.strokeStyle = 'rgba(0,0,0,0.35)';
+    ctx.lineWidth = Math.max(1, h * 0.02);
+    ctx.font = `700 ${Math.round(h * 0.3)}px "Baloo 2", system-ui, sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.strokeText(String(number), x + w / 2, y + h * 0.52);
+    ctx.fillText(String(number), x + w / 2, y + h * 0.52);
+  }
+
+  ctx.restore();
+}
+
 function makeBackgroundCanvas(width, height) {
   const c = document.createElement('canvas');
   c.width = Math.max(2, Math.round(width * DPR));
@@ -102,4 +156,4 @@ function makeBackgroundCanvas(width, height) {
   return c;
 }
 
-export { roundRect, tileColor, drawTile, drawEmptyCell, makeBackgroundCanvas };
+export { roundRect, tileColor, drawTile, drawPictureTile, drawEmptyCell, makeBackgroundCanvas };

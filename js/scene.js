@@ -6,8 +6,11 @@ import { SkinCatalog } from './skins.js';
 import { SettingsStore } from './storage.js';
 import { SoundPlayer, Haptics } from './audio.js';
 import {
-  tileColor, drawTile, drawEmptyCell, makeBackgroundCanvas,
+  tileColor, drawTile, drawPictureTile, drawEmptyCell, makeBackgroundCanvas,
 } from './textures.js';
+import {
+  renderBuiltin, imageToSquare, loadImage, isBuiltinId,
+} from './pictures.js';
 
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 const easeOut = (t) => 1 - Math.pow(1 - t, 3);
@@ -38,8 +41,12 @@ class GameScene {
     this.anim = null; // { from: Map(value -> {x,y}), start }
     this.dpr = Math.min(window.devicePixelRatio || 1, 3);
 
+    this.pictureCanvas = null; // square source for picture mode
+    this.pictureCustomImg = null; // cached uploaded HTMLImageElement
+
     this.bindEvents();
     this.performLayout();
+    this.refreshPicture();
     this.updateHud();
 
     this.loop = this.loop.bind(this);
@@ -156,6 +163,36 @@ class GameScene {
     }
   }
 
+  // MARK: - Picture mode
+
+  // Rebuild the square source picture from the current settings. For a built-in
+  // it's synchronous; for a custom upload it loads the image (async) then keeps
+  // it cached so later rebuilds are instant.
+  refreshPicture() {
+    const PIC_PX = 720;
+    if (!this.settings.pictureMode) {
+      this.pictureCanvas = null;
+      return;
+    }
+    const id = this.settings.pictureId;
+    if (id === 'custom') {
+      const data = this.settings.customImage;
+      if (!data) { this.pictureCanvas = null; return; }
+      const build = (img) => {
+        this.pictureCustomImg = img;
+        this.pictureCanvas = imageToSquare(img, PIC_PX);
+      };
+      if (this.pictureCustomImg && this.pictureCustomImg.src === data) {
+        build(this.pictureCustomImg);
+      } else {
+        this.pictureCanvas = null; // fall back to colours until it loads
+        loadImage(data).then(build).catch(() => { this.pictureCanvas = null; });
+      }
+      return;
+    }
+    this.pictureCanvas = renderBuiltin(isBuiltinId(id) ? id : 'sun', PIC_PX);
+  }
+
   // MARK: - External controls (from main.js)
 
   presentSettings() {
@@ -233,6 +270,7 @@ class GameScene {
     const puzzle = this.game.puzzle;
     const size = this.game.size;
     const showNumbers = this.settings.showNumbers;
+    const pic = this.settings.pictureMode ? this.pictureCanvas : null;
 
     // Empty cells first (the recessed slot under the blank).
     for (let p = 0; p < puzzle.count; p++) {
@@ -264,7 +302,15 @@ class GameScene {
         }
       }
       const color = tileColor(value, size);
-      drawTile(ctx, x, y, rect.w, rect.h, color, value + 1, showNumbers);
+      if (pic) {
+        drawPictureTile(
+          ctx, x, y, rect.w, rect.h, pic,
+          Math.floor(value / size), value % size, size,
+          value + 1, showNumbers,
+        );
+      } else {
+        drawTile(ctx, x, y, rect.w, rect.h, color, value + 1, showNumbers);
+      }
     }
   }
 

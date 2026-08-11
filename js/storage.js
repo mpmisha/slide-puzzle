@@ -8,6 +8,9 @@ const KEYS = {
   haptics: 'hapticsEnabled',
   showNumbers: 'sp_showNumbers',
   level: 'sp_level',
+  pictureMode: 'sp_pictureMode',
+  pictureId: 'sp_pictureId',
+  customImage: 'sp_customImage',
 };
 
 function readBool(key, fallback) {
@@ -27,6 +30,26 @@ const SettingsStore = {
   // players. On by default; turn off for a pure-picture challenge.
   get showNumbers() { return readBool(KEYS.showNumbers, true); },
   set showNumbers(value) { localStorage.setItem(KEYS.showNumbers, value ? 'true' : 'false'); },
+
+  // Picture mode: tiles show slices of a picture instead of the colour
+  // gradient. Off by default so the game opens on the familiar colour puzzle.
+  get pictureMode() { return readBool(KEYS.pictureMode, false); },
+  set pictureMode(value) { localStorage.setItem(KEYS.pictureMode, value ? 'true' : 'false'); },
+
+  // Which picture is selected: a built-in id ('sun', 'cat', ...) or 'custom'.
+  get pictureId() { return localStorage.getItem(KEYS.pictureId) || 'sun'; },
+  set pictureId(value) { localStorage.setItem(KEYS.pictureId, String(value)); },
+
+  // The child's uploaded image, stored as a data URL (or '' if none).
+  get customImage() { return localStorage.getItem(KEYS.customImage) || ''; },
+  set customImage(value) {
+    try {
+      if (value) localStorage.setItem(KEYS.customImage, value);
+      else localStorage.removeItem(KEYS.customImage);
+    } catch (_) {
+      // Image too big for storage; picture just won't persist across reloads.
+    }
+  },
 };
 
 const ProgressStore = {

@@ -1,6 +1,6 @@
 // Offline-first service worker. Caches the whole app shell so Slide Puzzle runs
 // with no network once installed to the home screen.
-const CACHE = 'slide-puzzle-v1';
+const CACHE = 'slide-puzzle-v2';
 
 const ASSETS = [
   './',
@@ -13,6 +13,7 @@ const ASSETS = [
   './js/puzzle.js',
   './js/levels.js',
   './js/textures.js',
+  './js/pictures.js',
   './js/skins.js',
   './js/color.js',
   './js/audio.js',
