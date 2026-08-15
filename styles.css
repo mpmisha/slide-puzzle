@@ -11,6 +11,17 @@
 
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 
+/* Baloo 2 has no Hebrew glyphs — use rounded Fredoka for Hebrew, keep Baloo 2
+   for English. Applied by the document's lang/dir (set before first paint). */
+:root[lang="he"],
+:root[dir="rtl"] {
+  font-family: "Fredoka", "Baloo 2", system-ui, -apple-system, sans-serif;
+}
+:root[lang="he"] body,
+:root[dir="rtl"] body {
+  font-family: "Fredoka", "Baloo 2", system-ui, -apple-system, sans-serif;
+}
+
 /* The hidden attribute must win over explicit display (rows, buttons). */
 [hidden] { display: none !important; }
 
@@ -65,6 +76,7 @@ html, body {
   font-weight: 700;
   color: rgba(255, 255, 255, 0.72);
 }
+[dir="rtl"] .moves { left: auto; right: 18px; }
 
 .level {
   font-size: 26px;
@@ -86,6 +98,7 @@ html, body {
   pointer-events: auto;
   cursor: pointer;
 }
+[dir="rtl"] .gear { right: auto; left: 16px; }
 .gear:active { transform: scale(0.94); }
 
 /* Overlays */
@@ -167,6 +180,10 @@ html, body {
   transition: left 0.15s ease;
 }
 .toggle.on .knob { left: 27px; }
+
+/* RTL: knob rests on the right and slides left when on. */
+[dir="rtl"] .toggle .knob { left: auto; right: 3px; transition: right 0.15s ease; }
+[dir="rtl"] .toggle.on .knob { right: 27px; }
 
 /* Picture picker: a small wrap of tappable thumbnails + an upload tile. */
 .picker {

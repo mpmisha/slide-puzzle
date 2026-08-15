@@ -14,8 +14,27 @@
   <link rel="apple-touch-icon" href="icons/icon-180.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;600;700;800&family=Fredoka:wght@500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
+  <script>
+    // Early locale bootstrap so RTL/dir is correct before first paint (no flash).
+    // Full resolution + persistence happens in js/i18n.js on module load.
+    (function () {
+      try {
+        var valid = { en: 1, he: 1 };
+        var q = new URLSearchParams(location.search).get('lang');
+        var lang = (q && valid[q]) ? q : localStorage.getItem('lang');
+        if (!lang || !valid[lang]) {
+          var nav = (navigator.languages && navigator.languages[0]) || navigator.language || '';
+          nav = String(nav).toLowerCase();
+          lang = (nav.indexOf('he') === 0 || nav.indexOf('iw') === 0) ? 'he' : 'en';
+        }
+        var el = document.documentElement;
+        el.lang = lang;
+        el.dir = lang === 'he' ? 'rtl' : 'ltr';
+      } catch (e) { /* ignore */ }
+    })();
+  </script>
 </head>
 <body>
   <!-- Probe used to read safe-area insets as numbers for canvas layout. -->
@@ -33,16 +52,16 @@
   <div class="overlay" id="settings-overlay" hidden>
     <div class="scrim" data-dismiss="settings"></div>
     <div class="panel" role="dialog" aria-label="Settings">
-      <h2>Settings</h2>
+      <h2 id="settings-title">Settings</h2>
       <p class="panel-sub" id="settings-level">Level 1 of 12</p>
 
       <div class="row">
-        <span class="row-label">Show numbers</span>
+        <span class="row-label" id="label-numbers">Show numbers</span>
         <button class="toggle" id="toggle-numbers" role="switch"><span class="knob"></span></button>
       </div>
 
       <div class="row">
-        <span class="row-label">Picture puzzle</span>
+        <span class="row-label" id="label-picture">Picture puzzle</span>
         <button class="toggle" id="toggle-picture" role="switch"><span class="knob"></span></button>
       </div>
 
@@ -51,12 +70,12 @@
       </div>
 
       <div class="row">
-        <span class="row-label">Sound</span>
+        <span class="row-label" id="label-sound">Sound</span>
         <button class="toggle" id="toggle-sound" role="switch"><span class="knob"></span></button>
       </div>
 
       <div class="row">
-        <span class="row-label">Vibration</span>
+        <span class="row-label" id="label-haptics">Vibration</span>
         <button class="toggle" id="toggle-haptics" role="switch"><span class="knob"></span></button>
       </div>
 
@@ -71,7 +90,7 @@
     <div class="scrim"></div>
     <div class="panel win" role="dialog" aria-label="Solved">
       <div class="win-emoji">🧩</div>
-      <h2>You solved it!</h2>
+      <h2 id="solved-title">You solved it!</h2>
       <p class="win-caption" id="solved-caption">Level 1 · 0 moves</p>
       <button class="btn primary" id="btn-next">Next Puzzle</button>
     </div>
@@ -82,7 +101,7 @@
     <div class="scrim"></div>
     <div class="panel win" role="dialog" aria-label="You win">
       <div class="win-emoji">🏆</div>
-      <h2>All puzzles solved!</h2>
+      <h2 id="victory-title">All puzzles solved!</h2>
       <p class="win-caption" id="victory-caption">You cleared every level!</p>
       <button class="btn primary" id="btn-play-again">Play Again</button>
     </div>

@@ -3,6 +3,9 @@
 import { GameScene } from './scene.js';
 import { SettingsStore } from './storage.js';
 import { BUILTINS, renderBuiltin } from './pictures.js';
+import {
+  resolveLang, applyLang, isValidLang, onLang, t,
+} from './i18n.js';
 
 const $ = (id) => document.getElementById(id);
 const canvas = $('game');
@@ -16,6 +19,12 @@ const dom = {
   onPresentVictory: openVictory,
 };
 
+// Cached HUD/overlay state so we can re-render captions on a live language switch.
+let lastLevel = 1;
+let lastLevelTotal = 1;
+let lastSolved = null; // { level, moves }
+let lastVictory = null; // { levels }
+
 const scene = new GameScene(canvas, dom);
 
 // Debug hook for automated tests only (opt-in via ?debug).
@@ -24,12 +33,14 @@ if (new URLSearchParams(location.search).has('debug')) window.scene = scene;
 // ---- HUD ----
 
 function setLevel(level, total) {
-  $('hud-level').textContent = `Level ${level}`;
-  $('settings-level').textContent = `Level ${level} of ${total}`;
+  lastLevel = level;
+  lastLevelTotal = total;
+  $('hud-level').textContent = t('level', level);
+  $('settings-level').textContent = t('levelOf', level, total);
 }
 
 function setMoves(n) {
-  $('hud-moves').textContent = n === 1 ? '1 move' : `${n} moves`;
+  $('hud-moves').textContent = t('moves', n);
 }
 
 // ---- Gear / settings ----
@@ -58,7 +69,7 @@ function buildPicker() {
     const btn = document.createElement('button');
     btn.className = 'pic-thumb';
     btn.dataset.id = b.id;
-    btn.setAttribute('aria-label', b.name);
+    btn.setAttribute('aria-label', t(`pic_${b.id}`));
     const thumb = renderBuiltin(b.id, 96);
     thumb.className = 'pic-thumb-img';
     btn.appendChild(thumb);
@@ -69,7 +80,7 @@ function buildPicker() {
   uploadTile = document.createElement('button');
   uploadTile.className = 'pic-thumb pic-upload';
   uploadTile.dataset.id = 'custom';
-  uploadTile.setAttribute('aria-label', 'Upload your own photo');
+  uploadTile.setAttribute('aria-label', t('uploadPhoto'));
   uploadTile.innerHTML = '<span class="pic-upload-plus">＋</span>';
   uploadTile.addEventListener('click', () => {
     if (SettingsStore.customImage && SettingsStore.pictureId !== 'custom') {
@@ -250,7 +261,8 @@ backHubBtn.addEventListener('click', (e) => {
 // ---- Solved overlay ----
 
 function openSolved({ level, moves }) {
-  $('solved-caption').textContent = `Level ${level} · ${moves} ${moves === 1 ? 'move' : 'moves'}`;
+  lastSolved = { level, moves };
+  $('solved-caption').textContent = t('solvedCaption', level, moves);
   $('solved-overlay').hidden = false;
 }
 
@@ -264,7 +276,8 @@ $('btn-next').addEventListener('click', () => {
 // ---- Victory overlay ----
 
 function openVictory({ levels }) {
-  $('victory-caption').textContent = `You cleared all ${levels} puzzles!`;
+  lastVictory = { levels };
+  $('victory-caption').textContent = t('victoryCaption', levels);
   $('victory-overlay').hidden = false;
 }
 
@@ -275,10 +288,87 @@ $('btn-play-again').addEventListener('click', () => {
   scene.startNewGame();
 });
 
-// ---- Service worker (offline support) ----
+// ---- Localization ----
 
+// (Re)apply the current locale to every visible string. Called once on load and
+// again whenever the hub broadcasts a language change (live, no reload).
+function applyTranslations() {
+  document.title = t('appTitle');
+
+  // HUD + settings counters re-render through the scene's HUD contract.
+  scene.updateHud();
+
+  $('settings-title').textContent = t('settings');
+  $('label-numbers').textContent = t('showNumbers');
+  $('label-picture').textContent = t('picturePuzzle');
+  $('label-sound').textContent = t('sound');
+  $('label-haptics').textContent = t('vibration');
+  $('btn-new-game').textContent = t('restart');
+  $('btn-back-hub').textContent = t('backToGames');
+  $('btn-close').textContent = t('close');
+
+  $('solved-title').textContent = t('solvedTitle');
+  $('btn-next').textContent = t('nextPuzzle');
+  $('victory-title').textContent = t('victoryTitle');
+  $('btn-play-again').textContent = t('playAgain');
+
+  $('gear').setAttribute('aria-label', t('settings'));
+  $('hud-moves').setAttribute('aria-label', t('movesAria'));
+
+  // Picker thumbnails (aria-labels) + the upload tile.
+  picturePicker.querySelectorAll('.pic-thumb').forEach((el) => {
+    const id = el.dataset.id;
+    if (id === 'custom') el.setAttribute('aria-label', t('uploadPhoto'));
+    else el.setAttribute('aria-label', t(`pic_${id}`));
+  });
+
+  // Re-render captions for any overlay currently open.
+  if (!$('solved-overlay').hidden && lastSolved) {
+    $('solved-caption').textContent = t('solvedCaption', lastSolved.level, lastSolved.moves);
+  }
+  if (!$('victory-overlay').hidden && lastVictory) {
+    $('victory-caption').textContent = t('victoryCaption', lastVictory.levels);
+  }
+}
+
+// Resolve + apply the platform language on load (URL ?lang= → stored → detect).
+applyLang(resolveLang());
+onLang(applyTranslations);
+applyTranslations();
+
+// Live language switching: the hub postMessages when the player changes language
+// while this game is embedded. Same-origin only.
+window.addEventListener('message', (e) => {
+  if (e.origin !== location.origin) return;
+  const data = e.data;
+  if (data && data.type === 'playground:lang' && isValidLang(data.lang)) {
+    applyLang(data.lang, true);
+  }
+});
+
+// ---- Service worker (offline support + robust self-update) ----
+// Reload once a new worker takes control so players always get the latest build.
 if ('serviceWorker' in navigator) {
+  let refreshing = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (refreshing) return;
+    refreshing = true;
+    window.location.reload();
+  });
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('./service-worker.js').catch(() => {});
+    navigator.serviceWorker.register('./service-worker.js').then((reg) => {
+      reg.addEventListener('updatefound', () => {
+        const worker = reg.installing;
+        if (!worker) return;
+        worker.addEventListener('statechange', () => {
+          if (worker.state === 'installed' && navigator.serviceWorker.controller) {
+            worker.postMessage({ type: 'SKIP_WAITING' });
+          }
+        });
+      });
+      if (reg.waiting && navigator.serviceWorker.controller) {
+        reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+      }
+    }).catch(() => {});
   });
 }
