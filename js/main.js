@@ -1,3 +1,4 @@
+import './telemetry.js';
 // Entry point: wires the DOM HUD/overlays to the canvas GameScene, and aligns
 // with the Playground hub (shared Sound/Vibration settings + back handshake).
 import { GameScene } from './scene.js';
